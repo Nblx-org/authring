@@ -1,0 +1,37 @@
+[project]
+name = "authring"
+version = "0.0.1"
+description = "Authring is an MCP-driven guardrails system that evaluates code modification proposals based on historical impact, contributor expertise, and production risk assessment. The system utilizes: Astra DB for historical data storage, Unstructured.io for document parsing, Langflow for AI-driven decision-making, Twilio for real-time human validation, and GitHub CLI (gh) for managing patch review links."
+authors = [
+    { name = "Chris McKenzie", email = "hello@noblox.pro" }
+]
+license = {file = "LICENSE"}
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+    "astra-db",
+    "cassandra-driver",
+    "cassio",
+    "fastmcp",
+    "gitpython",
+    "radon",
+    "tree-sitter",
+    "unstructured"
+]
+
+[project.urls]
+"Bug Tracker" = "https://github.com/nblx-org/authring"
+Homepage = "https://authring.org"
+Repository = "https://github.com/nblx-org/authring"
