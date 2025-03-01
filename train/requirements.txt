@@ -1,6 +1,0 @@
-gitpython
-tree-sitter
-radon
-cassio
-astra-db
-
