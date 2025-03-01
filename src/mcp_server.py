@@ -1,16 +1,27 @@
 from fastmcp import FastMCP
 import httpx
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+from twilio.rest import Client
 # Initialize Langflow client
 #langflow = LangflowClient(LANGFLOW_URL, LANGFLOW_API_KEY)
 
 mcp = FastMCP("Patch Validator 🔍")
 
+# Twilio configuration
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_API_KEY = os.getenv("TWILIO_API_KEY")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
+
+if not TWILIO_API_KEY or not TWILIO_ACCOUNT_SID or not TWILIO_PHONE_NUMBER:
+    raise ValueError("Twilio environment variables not set (TWILIO_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_PHONE_NUMBER)")
+
+twilio_client = Client(TWILIO_API_KEY, "", account_sid=TWILIO_ACCOUNT_SID)
+
+
 # Configuration
 LANGFLOW_URL = "http://localhost:7860"  # Default Langflow port
 LANGFLOW_API_KEY = None  # If authentication is required
-TWILIO_WEBHOOK_URL = os.getenv("TWILIO_WEBHOOK_URL", "http://localhost:5000/twilio_mock")  # Mock webhook for Twilio
 IS_DEMO = True  # Toggle demo mode
 
 class LangflowClient:
@@ -87,6 +98,39 @@ async def validate_patch(patch_info: dict) -> str:
 
     return "This change is forbidden by policy"
     #return result["message"]
+
+sent_messages = []  # Store (to_number, message_sid) tuples
+
+@mcp.tool()
+async def send_sms(to_number: str, message_body: str) -> str:
+    """Sends an SMS message using Twilio."""
+    try:
+        message = twilio_client.messages.create(
+            to=to_number,
+            from_=TWILIO_PHONE_NUMBER,
+            body=message_body
+        )
+        sent_messages.append((to_number, message.sid, message.date_created))
+        return f"Message sent to {to_number}. SID: {message.sid}"
+    except Exception as e:
+        return f"Error sending SMS: {str(e)}"
+
+@mcp.tool()
+async def check_sms_replies(to_number: str) -> List[str]:
+    """Checks for replies to SMS messages sent to a specific number."""
+    replies = []
+    for sent_to, sent_sid, sent_time in sent_messages:
+        if sent_to != to_number:
+            continue
+
+        messages = twilio_client.messages.list(
+            to=TWILIO_PHONE_NUMBER,
+            from_=to_number  # Check for messages from the user to our Twilio number
+        )
+        for message in messages:
+            if message.date_created > sent_time:
+                replies.append(f"Reply from {message.from_}: {message.body}")
+    return replies
 
 if __name__ == "__main__":
     mcp.run()
