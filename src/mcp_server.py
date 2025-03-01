@@ -1,10 +1,13 @@
 from fastmcp import FastMCP
 import httpx
+import os
 from typing import Dict, Optional
 
-# TODO: Configure these in environment variables or config file
+# Configuration
 LANGFLOW_URL = "http://localhost:7860"  # Default Langflow port
 LANGFLOW_API_KEY = None  # If authentication is required
+TWILIO_WEBHOOK_URL = os.getenv("TWILIO_WEBHOOK_URL", "http://localhost:5000/twilio_mock")  # Mock webhook for Twilio
+IS_DEMO = True  # Toggle demo mode
 
 class LangflowClient:
     """Client for interacting with Langflow API"""
@@ -23,8 +26,11 @@ class LangflowClient:
         3. Validate the patch syntax and potential impact
         4. Return a structured response with validation results
         """
+        """Sends validation request to Langflow or returns a stubbed response in demo mode."""
+        if IS_DEMO:
+            return {"status": "warning", "message": "valid purpose, uncertain patch - contacting reviewer"}
+        
         try:
-            # Stubbed response - in reality, this would make an async HTTP request to Langflow
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/api/v1/process",  # Actual Langflow endpoint
@@ -60,7 +66,7 @@ mcp = FastMCP("Patch Validator 🔍")
 async def validate_patch(patch_info: dict) -> str:
     """
     Validate the purpose, patch, and base code folder using Langflow.
-
+    
     Expected input format:
     {
         "base_code_folder": "The folder of the code being patched",
@@ -72,7 +78,12 @@ async def validate_patch(patch_info: dict) -> str:
     purpose = patch_info.get("purpose", "")
     patch = patch_info.get("patch", "")
 
-    # Get validation result from Langflow
     result = await langflow.validate_proposal(purpose, patch, base_code_folder)
 
+    if IS_DEMO and result["status"] == "warning":
+        async with httpx.AsyncClient() as client:
+            await client.post(TWILIO_WEBHOOK_URL, json={"message": "Reviewer approval required for patch"})
+        return "Demo mode: Triggered Twilio notification."
+
     return result["message"]
+

@@ -1,4 +1,4 @@
-astra-db
+astrapy
 cassandra-driver
 cassio
 fastmcp

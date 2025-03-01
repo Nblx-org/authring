@@ -21,7 +21,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "astra-db",
     "cassandra-driver",
     "cassio",
     "fastmcp",
