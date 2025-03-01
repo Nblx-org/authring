@@ -1,93 +1,164 @@
-import subprocess
 import os
-import json
-import mimetypes
-from collections import defaultdict
-from radon.complexity import cc_visit
-from tree_sitter import Language, Parser
-from cassandra.cluster import Cluster
+from dotenv import load_dotenv
+import subprocess
 import argparse
-from cassandra.cluster import Cluster
-from cassandra.auth import PlainTextAuthProvider
+import json
+#from cassandra.cluster import Cluster
+#from cassandra.auth import PlainTextAuthProvider
+import tree_sitter
+from tree_sitter import Language, Parser
+import tempfile
+import shutil
 
-cloud_config = {'secure_connect_bundle': 'path/to/secure-connect-database_name.zip'}
-cluster = Cluster(cloud=cloud_config)
-session = cluster.connect()
+from astrapy import DataAPIClient
+import uuid
+import os
 
-session.set_keyspace("your_keyspace")
-def run_command(command, directory="."):
-    result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=directory)
-    return result.stdout.strip() if result.returncode == 0 else ""
+import requests
+import json
 
-def get_earliest_latest_commits(directory, depth):
-    depth_arg = f"--max-count={depth}" if depth else ""
-    earliest_commit = run_command(f"git rev-list --max-parents=0 HEAD {depth_arg} | tail -1 | xargs git log -n 1 --format='%ad' --date=short", directory)
-    latest_commit = run_command(f"git rev-list --all --since=1970-01-01 {depth_arg} | head -1 | xargs git log -n 1 --format='%ad' --date=short", directory)
-    return earliest_commit, latest_commit
 
-def get_authors_info(directory, depth):
-    authors = {}
-    depth_arg = f"--max-count={depth}" if depth else ""
-    author_commits = run_command(f"git log --all --format='%an|%ae|%ad' --date=short {depth_arg}", directory)
-    for line in author_commits.splitlines():
-        name, email, date = line.split('|')
-        normalized_name = name.strip().lower()
-        if normalized_name not in authors:
-            authors[normalized_name] = {"name": name, "email": email, "first_commit": date, "last_commit": date, "commit_count": 0}
-        authors[normalized_name]["last_commit"] = date
-        authors[normalized_name]["commit_count"] += 1
-    return authors
 
-def analyze_python_code(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
-        code = f.read()
+
+
+def run_command(command):
+    """Executes a shell command and returns the output."""
+    result = subprocess.run(command, shell=True, text=True, capture_output=True)
+    return result.stdout
+
+def clone_repository(repo_url):
+    """Clones the remote Git repository into a temporary directory."""
+    temp_dir = tempfile.mkdtemp()
+    print(f"Cloning repository into {temp_dir}...")
+    command = f"git clone {repo_url} {temp_dir}"
+    run_command(command)
+    return temp_dir
+
+def analyze_repository(repo_url, depth=None):
+    """Analyzes a remote Git repository by cloning it and running 'git log'."""
     
-    complexity_scores = cc_visit(code)
-    avg_complexity = sum(c.complexity for c in complexity_scores) / len(complexity_scores) if complexity_scores else 0
+    # Clone the repository into a temporary directory
+    temp_dir = clone_repository(repo_url)
+
+    try:
+        # Ensure the directory is a valid Git repository
+        if not os.path.exists(os.path.join(temp_dir, ".git")):
+            print(f"Error: The cloned directory '{temp_dir}' is not a Git repository.")
+            return None
+
+        depth_arg = f"--max-count={depth}" if depth else ""
+        log_output = run_command(f"git -C {temp_dir} log {depth_arg} --pretty=format:'%H %an %ae' --name-only")
+
+        if not log_output:
+            print("Error: Unable to retrieve Git logs.")
+            return None
+
+        authors_info = {}
+        file_complexity = {}
+        commit_count = {}
+
+        lines = log_output.split('\n')
+        current_commit = None
+        for line in lines:
+            if line.strip():
+                parts = line.split()
+                #print(parts)
+                if len(parts) != 1:  # Commit hash, author name, email
+                    commit_hash=parts[0]
+                    email=parts[len(parts)-1]
+                    author=" ".join(parts[1:len(parts)-1])
+                    current_commit = commit_hash
+                    if email not in authors_info:
+                        authors_info[email] = {"author": author, "email": email, "commit_count": 0}
+                    authors_info[email]["commit_count"] += 1
+                else:  # File name
+                    file = line.strip()
+                    if file not in file_complexity:
+                        file_complexity[file] = 0
+                        commit_count[file] = 0
+                    file_complexity[file] = 1
+                    commit_count[file] += 1
+
+        # Cleanup: Remove the temporary directory
+        shutil.rmtree(temp_dir)
+        return {
+            "authors": list(authors_info.values()),
+            "files": [
+                {"file": f, "complexity": file_complexity[f], "commit_count": commit_count[f]} for f in file_complexity
+            ],
+        }
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
+def count_function_calls(file_path):
+    LANGUAGE_PATH = 'tree-sitter-python.so'
+    if not os.path.exists(LANGUAGE_PATH):
+        print("Error: Missing Tree-sitter language file.")
+        return 0
     
+    Language.build_library(
+        LANGUAGE_PATH,
+        ["tree-sitter-python"]
+    )
+    PY_LANGUAGE = Language(LANGUAGE_PATH, "python")
     parser = Parser()
-    parser.set_language(Language("build/tree-sitter-python.so", "python"))
-    tree = parser.parse(bytes(code, "utf8"))
-    function_calls = len(tree.root_node.children)
+    parser.set_language(PY_LANGUAGE)
     
-    return avg_complexity, function_calls
-
-def get_code_metrics(directory):
-    metrics = {}
-    all_files = run_command("git ls-files", directory).splitlines()
-    for file_path in all_files:
-        if file_path.endswith(".py"):
-            avg_complexity, function_calls = analyze_python_code(file_path)
-            metrics[file_path] = {"complexity": avg_complexity, "function_calls": function_calls}
-    return metrics
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            code = file.read()
+    except FileNotFoundError:
+        print(f"Error: File {file_path} not found.")
+        return 0
+    
+    tree = parser.parse(bytes(code, "utf8"))
+    query = PY_LANGUAGE.query("(call function: (identifier) @function_call)")
+    captures = query.captures(tree.root_node)
+    
+    return len(captures)
 
 def store_in_astra(data):
-    cluster = Cluster(["127.0.0.1"])
-    session = cluster.connect("git_analysis")
-    query = """
-    INSERT INTO code_metrics (author, email, file, complexity, function_calls, commit_count)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """
-    for author in data["authors"]:
-        for file, metrics in data["metrics"].items():
-            session.execute(query, (author["name"], author["email"], file, metrics["complexity"], metrics["function_calls"], author["commit_count"]))
+    load_dotenv()
+    url = os.getenv("URL")
+    key =os.getenv("KEY")
+    headers = {
+    "X-Cassandra-Token": key,
+    "Content-Type": "application/json"
+    }
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Analyze Git repository statistics and code complexity.")
-    parser.add_argument("--directory", default=".", help="Path to the Git repository (defaults to current directory)")
-    parser.add_argument("--depth", type=int, default=None, help="Maximum number of commits to analyze (defaults to all)")
+# Data to be inserted
+    data = {
+    "author": "Mookie",
+    "email": "mookie.betts@gmail.com",
+    "file": "Mookie",
+    "complexity": 1,
+    "function_calls": 1,
+    "commit_count": 1
+    }
+
+# Send the POST request to insert the data
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+
+# Handle the response
+    if response.status_code == 201:
+        print("Data successfully posted!")
+    else:
+        print(f"Failed to post data. Status code: {response.status_code}, Error: {response.text}")
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--directory", required=True, help="Path to the Git repository")
+    parser.add_argument("--depth", type=int, help="Maximum number of commits to analyze")
     args = parser.parse_args()
     
-    earliest, latest = get_earliest_latest_commits(args.directory, args.depth)
-    authors_info = get_authors_info(args.directory, args.depth)
-    metrics = get_code_metrics(args.directory)
-    
-    output = {
-        "earliest_commit": earliest,
-        "latest_commit": latest,
-        "authors": list(authors_info.values()),
-        "metrics": metrics
-    }
-    
-    print(json.dumps(output, indent=4))
-    store_in_astra(output)
+    analysis_data = analyze_repository(args.directory, args.depth)
+    if analysis_data:
+        store_in_astra(analysis_data)
+        print(json.dumps(analysis_data, indent=2))
+    else:
+        print("No valid data to store.")
+
+if __name__ == "__main__":
+    main()
