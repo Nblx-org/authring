@@ -1,2 +1,4 @@
 samples
 deps
+dist
+src/authring.egg-info/
