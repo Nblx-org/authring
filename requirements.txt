@@ -9,3 +9,7 @@ radon
 tree-sitter
 unstructured
 twilio
+fastapi
+uvicorn
+httpx
+python-dotenv
