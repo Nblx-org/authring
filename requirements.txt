@@ -1,8 +1,8 @@
+astra-db
+cassandra-driver
+cassio
 fastmcp
 gitpython
-tree-sitter
 radon
-cassio
-astra-db
+tree-sitter
 unstructured
-cassandra-driver
