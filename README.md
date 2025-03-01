@@ -9,23 +9,6 @@ Authring is an MCP-driven guardrails system that evaluates code modification pro
 - **Twilio** for real-time human validation
 - **GitHub CLI (gh)** for managing patch review links
 
-## Project Structure
-```
-mock/
-├── code/
-│   ├── astra.json              # Mock Astra DB containing historical code metadata
-│   ├── contributors.json       # Mock contributor history and expertise
-│   ├── core/
-│   │   ├── booking.py          # Active, high-impact production code
-│   │   ├── payments.py         # Moderate-impact code
-│   ├── legacy/
-│   │   ├── old_api.py          # Low-impact, deprecated code
-│   ├── mock_db/
-│   │   ├── flight_data.json    # Simulated dataset for reference
-├── patches/
-│   ├── requests.json           # Mock proposed patches for validation
-```
-
 ## Workflow
 1. **MCP Server** receives a proposed patch in the format:
    ```json
