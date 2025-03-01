@@ -6,6 +6,7 @@ import click
 from mcp.server.lowlevel import Server
 import anyio
 from pydantic import FileUrl
+import uvicorn
 
 load_dotenv()
 
@@ -177,7 +178,6 @@ def main(port: int, transport: str) -> int:
             ],
         )
 
-        import uvicorn
 
         uvicorn.run(starlette_app, host="0.0.0.0", port=port)
     else:

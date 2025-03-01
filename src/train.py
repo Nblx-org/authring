@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 from dotenv import load_dotenv
 import subprocess
@@ -16,9 +17,6 @@ import os
 
 import requests
 import json
-
-
-
 
 
 def run_command(command):
