@@ -1,4 +1,6 @@
-# Authring 
+# Authring
+
+[![PyPI version](https://img.shields.io/pypi/v/authring.svg)](https://pypi.org/project/authring/)
 
 Authring is an MCP-driven guardrails system that evaluates code modification proposals based on historical impact, contributor expertise, and production risk assessment. The system utilizes:
 
