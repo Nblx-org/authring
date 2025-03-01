@@ -2,6 +2,10 @@ from fastmcp import FastMCP
 import httpx
 import os
 from typing import Dict, Optional
+# Initialize Langflow client
+#langflow = LangflowClient(LANGFLOW_URL, LANGFLOW_API_KEY)
+
+mcp = FastMCP("Patch Validator 🔍")
 
 # Configuration
 LANGFLOW_URL = "http://localhost:7860"  # Default Langflow port
@@ -57,10 +61,6 @@ class LangflowClient:
         except Exception as e:
             return {"status": "error", "message": f"Langflow validation failed: {str(e)}"}
 
-# Initialize Langflow client
-langflow = LangflowClient(LANGFLOW_URL, LANGFLOW_API_KEY)
-
-mcp = FastMCP("Patch Validator 🔍")
 
 @mcp.tool()
 async def validate_patch(patch_info: dict) -> str:
@@ -78,12 +78,15 @@ async def validate_patch(patch_info: dict) -> str:
     purpose = patch_info.get("purpose", "")
     patch = patch_info.get("patch", "")
 
-    result = await langflow.validate_proposal(purpose, patch, base_code_folder)
+    #result = await langflow.validate_proposal(purpose, patch, base_code_folder)
 
-    if IS_DEMO and result["status"] == "warning":
-        async with httpx.AsyncClient() as client:
-            await client.post(TWILIO_WEBHOOK_URL, json={"message": "Reviewer approval required for patch"})
-        return "Demo mode: Triggered Twilio notification."
+    #if IS_DEMO and result["status"] == "warning":
+    #    async with httpx.AsyncClient() as client:
+    #        await client.post(TWILIO_WEBHOOK_URL, json={"message": "Reviewer approval required for patch"})
+    #    return "Demo mode: Triggered Twilio notification."
 
-    return result["message"]
+    return "This change is forbidden by policy"
+    #return result["message"]
 
+if __name__ == "__main__":
+    mcp.run()

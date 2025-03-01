@@ -1,4 +1,6 @@
 astrapy
+mcp
+fastmcp
 cassandra-driver
 cassio
 fastmcp
