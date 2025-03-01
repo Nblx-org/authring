@@ -1,4 +1,6 @@
+#!/bin/bash
 
+API_KEY="$1"
 # Basic chat completion
 curl http://localhost:8000/chat/completions \
   -H "Content-Type: application/json" \
