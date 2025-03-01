@@ -1,0 +1,136 @@
+{
+  "nodes": [
+    {
+      "id": "mcp_input",
+      "type": "input.webhook",
+      "parameters": {
+        "url": "/mcp/propose",
+        "method": "POST",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "purpose": { "type": "string" },
+            "patch": { "type": "string" }
+          },
+          "required": ["purpose", "patch"]
+        }
+      }
+    },
+    {
+      "id": "extract_files",
+      "type": "custom.bash",
+      "parameters": {
+        "script": "echo '{mcp_input.patch}' | grep '+++ b/' | awk '{print $2}' | cut -c 3-"
+      }
+    },
+    {
+      "id": "git_blame",
+      "type": "custom.bash",
+      "parameters": {
+        "script": "git blame -p {extract_files.output} | grep '^author ' | sort | uniq -c"
+      }
+    },
+    {
+      "id": "git_history",
+      "type": "custom.bash",
+      "parameters": {
+        "script": "git log --pretty=format:'%H %an %ad' -- {extract_files.output}"
+      }
+    },
+    {
+      "id": "query_astra",
+      "type": "database.astra_query",
+      "parameters": {
+        "query": "SELECT author, file FROM patches WHERE file IN :files",
+        "parameters": { "files": "{extract_files.output}" }
+      }
+    },
+    {
+      "id": "unstructured_repo",
+      "type": "unstructured.github_loader",
+      "parameters": {
+        "repo_url": "https://github.com/your-org/your-repo",
+        "branch": "main",
+        "strategy": "fast",
+        "file_types": ["py", "rs", "js"],
+        "output_format": "json"
+      }
+    },
+    {
+      "id": "impact_analysis",
+      "type": "custom.python",
+      "parameters": {
+        "code": "def assess_impact(blame, history, astra, repo):\n    authors = set(blame.split('\\n'))\n    commit_count = len(history.split('\\n'))\n    production_files = any(f in repo for f in astra)\n    if not production_files: return 'safe'\n    if commit_count < 3: return 'maybe'\n    return 'unsafe'"
+      },
+      "inputs": {
+        "blame": "{git_blame.output}",
+        "history": "{git_history.output}",
+        "astra": "{query_astra.results}",
+        "repo": "{unstructured_repo.output}"
+      }
+    },
+    {
+      "id": "create_gist",
+      "type": "custom.bash",
+      "parameters": {
+        "script": "echo '{mcp_input.patch}' | gh gist create --desc '{mcp_input.purpose}' --secret -"
+      },
+      "condition": "{impact_analysis.output} == 'maybe'"
+    },
+    {
+      "id": "send_twilio_sms",
+      "type": "output.twilio_sms",
+      "parameters": {
+        "to": "{query_astra.results.author_phone}",
+        "message": "Authring wants to {mcp_input.purpose} by changing code in {extract_files.output}. Review it here {create_gist.output}. Respond with 'approve' or 'reject'."
+      },
+      "condition": "{impact_analysis.output} == 'maybe'"
+    },
+    {
+      "id": "wait_for_response",
+      "type": "input.wait_for_response",
+      "parameters": {
+        "timeout": 15,
+        "expected_responses": ["approve", "reject"],
+        "default_response": "reject"
+      },
+      "condition": "{impact_analysis.output} == 'maybe'"
+    },
+    {
+      "id": "validate_patch",
+      "type": "custom.python",
+      "parameters": {
+        "code": "def validate(impact, response=None):\n    if impact == 'safe': return 'valid purpose, valid patch'\n    if impact == 'unsafe': return 'valid purpose, invalid patch'\n    if response == 'approve': return 'valid purpose, valid patch'\n    return 'valid purpose, invalid patch'"
+      },
+      "inputs": {
+        "impact": "{impact_analysis.output}",
+        "response": "{wait_for_response.output}"
+      }
+    },
+    {
+      "id": "mcp_response",
+      "type": "output.http_response",
+      "parameters": {
+        "status_code": 200,
+        "body": "{validate_patch.output}"
+      }
+    }
+  ],
+  "connections": [
+    { "from": "mcp_input.output", "to": "extract_files.input" },
+    { "from": "extract_files.output", "to": "git_blame.input" },
+    { "from": "extract_files.output", "to": "git_history.input" },
+    { "from": "extract_files.output", "to": "query_astra.input" },
+    { "from": "query_astra.output", "to": "impact_analysis.input" },
+    { "from": "git_blame.output", "to": "impact_analysis.input" },
+    { "from": "git_history.output", "to": "impact_analysis.input" },
+    { "from": "unstructured_repo.output", "to": "impact_analysis.input" },
+    { "from": "impact_analysis.output", "to": "validate_patch.input" },
+    { "from": "validate_patch.output", "to": "mcp_response.input" },
+    { "from": "impact_analysis.output", "to": "create_gist.input", "condition": "maybe" },
+    { "from": "create_gist.output", "to": "send_twilio_sms.input", "condition": "maybe" },
+    { "from": "send_twilio_sms.output", "to": "wait_for_response.input", "condition": "maybe" },
+    { "from": "wait_for_response.output", "to": "validate_patch.input", "condition": "maybe" }
+  ]
+}
+

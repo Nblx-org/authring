@@ -1,0 +1,6 @@
+{
+  "flights": [
+    {"flight_id": "AA123", "status": "on-time", "seats": 5},
+    {"flight_id": "BB456", "status": "delayed", "seats": 0}
+  ]
+}

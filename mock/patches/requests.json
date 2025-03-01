@@ -1,0 +1,38 @@
+[
+    {
+        "description": "Absurd request - replacing all flight control logic with 'YOLO' function",
+        "expectation": "invalid purpose",
+        "data": {
+            "repo": "flight-control",
+            "purpose": "Replace all flight control logic with a single 'YOLO' decision function",
+            "patch": "diff --git a/critical/autopilot.py b/critical/autopilot.py\n\
+                      -def calculate_trajectory():\n\
+                      +def calculate_trajectory():\n\
+                      +    return 'YOLO'"
+        }
+    },
+    {
+        "description": "Safe change - fix typo in logging message",
+        "expectation": "valid purpose, valid patch",
+        "data": {
+            "repo": "flight-control",
+            "purpose": "Fix typo in logging message for engine diagnostics",
+            "patch": "diff --git a/utils/logger.py b/utils/logger.py\n\
+                      -log.info('Engne diagnostics running')\n\
+                      +log.info('Engine diagnostics running')"
+        }
+    },
+    {
+        "description": "Risky change - modifying flight path prediction logic",
+        "expectation": "maybe (triggers Twilio review)",
+        "data": {
+            "repo": "flight-control",
+            "purpose": "Improve flight path prediction using a new interpolation method",
+            "patch": "diff --git a/core/navigation.py b/core/navigation.py\n\
+                      -def predict_flight_path():\n\
+                      +def predict_flight_path():\n\
+                      +    return monte_carlo_simulation()"
+        }
+    }
+]
+

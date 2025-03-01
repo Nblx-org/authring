@@ -1,0 +1,18 @@
+{
+  "Alice": {
+    "tenure": 7,
+    "expertise": ["booking", "payments"],
+    "commit_history": {
+      "core/booking.py": 50,
+      "core/payments.py": 5
+    }
+  },
+  "Bob": {
+    "tenure": 1,
+    "expertise": ["frontend"],
+    "commit_history": {
+      "legacy/old_api.py": 3
+    }
+  }
+}
+
