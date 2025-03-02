@@ -19,13 +19,56 @@ parser = argparse.ArgumentParser(description="OpenAI-compatible proxy server for
 parser.add_argument("--api-base", default=DEFAULT_API_BASE, help=f"API base URL (default: {DEFAULT_API_BASE})")
 parser.add_argument("--host", default=DEFAULT_HOST, help=f"Host to bind to (default: {DEFAULT_HOST})")
 parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Port to bind to (default: {DEFAULT_PORT})")
+parser.add_argument("--verbose", action="store_true", help="Enable verbose logging of response content")
 
 # Global variable to store API base URL
 api_base = DEFAULT_API_BASE
+verbose_logging = False
 
 def stream_response(response):
-    """Generator to stream response data"""
+    """Generator to stream and modify response data"""
     for chunk in response.iter_bytes():
+        # For SSE (Server-Sent Events) responses from OpenAI-compatible APIs
+        # Each chunk is typically a text line starting with "data: " followed by JSON
+        try:
+            # Decode the chunk to a string
+            chunk_str = chunk.decode('utf-8')
+            print(chunk_str)
+            
+            # Check if this is a data line in SSE format
+            if chunk_str.startswith('data: '):
+                # Extract the JSON part (after "data: ")
+                json_str = chunk_str[6:]
+                
+                # Skip empty lines or "[DONE]" messages
+                if json_str.strip() and json_str.strip() != '[DONE]':
+                    # Parse the JSON
+                    data = json.loads(json_str)
+                    
+                    # MODIFY THE RESPONSE HERE
+                    # Example: Add a custom field to each chunk
+                    if 'choices' in data and len(data['choices']) > 0:
+                        # Access the content for different response formats
+                        if 'delta' in data['choices'][0]:
+                            # For streaming format
+                            if 'content' in data['choices'][0]['delta']:
+                                print(f"Streaming content: {data['choices'][0]['delta']['content']}")
+                        elif 'message' in data['choices'][0]:
+                            # For non-streaming format
+                            if 'content' in data['choices'][0]['message']:
+                                print(f"Message content: {data['choices'][0]['message']['content']}")
+                    
+                    # Convert back to JSON and format the SSE line
+                    new_json_str = json.dumps(data)
+                    chunk = f"data: {new_json_str}\n\n".encode('utf-8')
+                    
+                    print("Modified a chunk")
+            
+        except Exception as e:
+            # If any error occurs during processing, log it but still pass through the original chunk
+            print(f"Error processing chunk: {e}")
+        
+        # Yield the original or modified chunk
         yield chunk
 
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
@@ -45,8 +88,6 @@ def proxy(path):
     headers["host"] = parsed_url.netloc
     
     print(f"Forwarding request to: {url}")
-    print(f"Method: {request.method}")
-    #print(f"Headers: {headers}")
     
     try:
         # Get request body for methods that support it
@@ -57,6 +98,7 @@ def proxy(path):
         
         # Use synchronous client with a reasonable timeout
         with httpx.Client(timeout=60.0) as client:
+            print(json.dumps(json.loads(body), indent=4))
             response = client.request(
                 method=request.method,
                 url=url,
