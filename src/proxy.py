@@ -39,7 +39,6 @@ def praoxy(path: str, request: Request):
     print(headers)
     
     try:
-
         with httpx.Client() as client:
             response = client.request(
                 method=request.method,

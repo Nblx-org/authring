@@ -29,7 +29,7 @@ def stream_response(response):
         # Each chunk is typically a text line starting with "data: " followed by JSON
         # Decode the chunk to a string
         chunk_str = chunk.decode('utf-8')
-        print(chunk_str)
+        #print(chunk_str)
         
         # Check if this is a data line in SSE format
         if chunk_str.startswith('data: '):
@@ -75,8 +75,10 @@ def proxy(path):
         del(headers['Host'])
 
     headers["host"] = parsed_url.netloc
-    
-    print(f"Forwarding request to: {url}")
+    if 'X-Title' in headers:
+        headers['X-Title'] += " (authring)"
+
+    print(headers)
     
     try:
         # Get request body for methods that support it
